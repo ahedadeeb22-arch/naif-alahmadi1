@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Alert } from "@/components/ui/status";
 import { CatalogManager, type CatalogEntity, type CatalogRecord } from "@/features/operations/catalog-manager";
-import { UserManager } from "@/features/operations/user-manager";
+import { UserManager } from "@/features/operations/user-manager-v2";
 import { requireRole } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/format";
@@ -40,13 +40,22 @@ export default async function AdminSectionPage({ params }: { params: Promise<{ s
   }
 
   if (section === "users") {
-    const [profilesResult, membershipsResult, storesResult] = await Promise.all([
+    const [profilesResult, membershipsResult, storesResult, overridesResult] = await Promise.all([
       client.from("profiles").select("user_id,code,display_name,role,active,created_at,updated_at").order("display_name"),
       client.from("store_memberships").select("user_id,store_id,active,created_at,created_by"),
       client.from("stores").select("id,code,name,sort_order,active,created_at,updated_at").order("sort_order"),
+      client.from("user_permission_overrides").select("user_id,permission_code,allowed"),
     ]);
     if (profilesResult.error || membershipsResult.error || storesResult.error) return <Alert title="تعذر تحميل المستخدمين">تحقق من سياسات الجداول وصلاحية المدير.</Alert>;
-    return <UserManager profiles={(profilesResult.data ?? []) as ProfileRow[]} memberships={(membershipsResult.data ?? []) as StoreMembershipRow[]} stores={(storesResult.data ?? []) as StoreRow[]} currentUserId={profile.userId} />;
+    return (
+      <UserManager
+        profiles={(profilesResult.data ?? []) as ProfileRow[]}
+        memberships={(membershipsResult.data ?? []) as StoreMembershipRow[]}
+        stores={(storesResult.data ?? []) as StoreRow[]}
+        currentUserId={profile.userId}
+        overrides={(overridesResult.data ?? []) as { user_id: string; permission_code: string; allowed: boolean }[]}
+      />
+    );
   }
 
   if (section === "audit") {
