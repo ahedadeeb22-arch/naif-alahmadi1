@@ -48,3 +48,6 @@ supabase/.branches
 # Playwright / test artifacts
 /test-results/
 /playwright-report/
+
+# temporary scripts
+*.cjs

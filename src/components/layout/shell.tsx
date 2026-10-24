@@ -3,9 +3,37 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogOut, Menu, X } from "lucide-react";
-import type { NavGroup } from "@/components/layout/nav";
+import {
+  BookOpenCheck,
+  ClipboardList,
+  FileSearch,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  ReceiptText,
+  ShieldCheck,
+  Store,
+  Truck,
+  Users,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import type { NavGroup, NavIcon } from "@/components/layout/nav";
 import { createBrowserSupabase } from "@/lib/supabase/client";
+
+const navIcons: Record<NavIcon, LucideIcon> = {
+  BookOpenCheck,
+  ClipboardList,
+  FileSearch,
+  LayoutDashboard,
+  ReceiptText,
+  ShieldCheck,
+  Store,
+  Truck,
+  Users,
+  Wallet,
+};
 
 const roleLabels: Record<string, string> = {
   admin: "مدير",
@@ -84,7 +112,7 @@ export function AppShell({
                 <ul className="space-y-1">
                   {group.items.map((item) => {
                     const active = pathname === item.href;
-                    const Icon = item.icon;
+                    const Icon = navIcons[item.icon];
                     return (
                       <li key={item.href}>
                         <Link
@@ -120,7 +148,7 @@ export function AppShell({
 
       <nav className="app-bottom-nav fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-border-subtle bg-white py-2 lg:hidden">
         {flat.slice(0, 4).map((item) => {
-          const Icon = item.icon;
+          const Icon = navIcons[item.icon];
           const active = pathname === item.href;
           return (
             <Link
