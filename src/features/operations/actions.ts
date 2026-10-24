@@ -228,3 +228,115 @@ export async function closeSheetAction(input: unknown): Promise<OperationResult>
     return { ok: false, message: error instanceof Error ? error.message : "تعذر إغلاق اليومية" };
   }
 }
+export async function saveBulkNightOrdersAndCreateMorningSheetAction(input: unknown): Promise<{
+  ok: boolean;
+  message: string;
+  sheetId?: string;
+  revisionId?: string;
+}> {
+  const parsed = z
+    .object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      orders: z.array(
+        z.object({
+          storeId: z.string().uuid(),
+          lines: z.array(
+            z.object({
+              product_id: z.string().uuid(),
+              quantity: z.string().regex(/^\d{1,9}(\.\d{1,3})?$/),
+              note: z.string().max(300).nullable().optional(),
+            }),
+          ),
+        }),
+      ),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, message: "بيانات الطلبات غير صالحة" };
+  }
+
+  try {
+    await requireRole(["admin", "worker"]);
+    const client = await createServerSupabase();
+    const { date, orders } = parsed.data;
+
+    // 1. حفظ جميع طلبات البقالات عبر RPC المعتمد
+    for (const order of orders) {
+      await callRpc(client, "upsert_night_order", {
+        p_business_date: date,
+        p_store_id: order.storeId,
+        p_lines: order.lines.map((l) => ({
+          product_id: l.product_id,
+          quantity: l.quantity,
+          note: l.note ?? null,
+        })),
+        p_submit: true, // اعتماد وحفظ الطلب
+      });
+    }
+
+    // 2. إنشاء / فتح كشف الصباح ليوم العمل المستهدف
+    const draftRes = await callRpc<{
+      sheet_id: string;
+      revision_id: string;
+      version: number;
+      status: string;
+    }>(client, "get_or_create_draft", { p_business_date: date });
+
+    revalidatePath("/worker/night-orders");
+    revalidatePath("/worker/sheets");
+    revalidatePath("/worker");
+    revalidatePath("/admin/night-orders");
+    revalidatePath("/admin/sheets");
+
+    return {
+      ok: true,
+      message: "تم حفظ جميع طلبات الليل وإنشاء كشف الصباح بنجاح في قاعدة البيانات",
+      sheetId: draftRes.sheet_id,
+      revisionId: draftRes.revision_id,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "تعذر حفظ الطلبات وإنشاء الكشف",
+    };
+  }
+}
+
+export async function setUserPermissionOverrideAction(input: unknown): Promise<OperationResult> {
+  const parsed = z
+    .object({
+      userId: uuid,
+      permissionCode: z.string().min(1).max(50),
+      allowed: z.boolean(),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) return { ok: false, message: "بيانات الصلاحية غير صالحة" };
+
+  try {
+    const admin = await requireRole(["admin"]);
+    const client = await createServerSupabase();
+
+    const { error } = await client.from("user_permission_overrides").upsert(
+      {
+        user_id: parsed.data.userId,
+        permission_code: parsed.data.permissionCode,
+        allowed: parsed.data.allowed,
+        granted_by: admin.userId,
+      } as never,
+      { onConflict: "user_id,permission_code" },
+    );
+
+    if (error) throw new Error("تعذر تحديث مفتاح الصلاحية في قاعدة البيانات");
+
+    revalidatePath("/admin/users");
+    revalidatePath("/worker/sheets");
+    return { ok: true, message: "تم تحديث الصلاحية بنجاح" };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "تعذر تحديث الصلاحية",
+    };
+  }
+}
