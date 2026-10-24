@@ -184,3 +184,38 @@ export async function postAction(
     return { ok: false, error: error instanceof Error ? error.message : "تعذر اعتماد اليومية" };
   }
 }
+
+export async function postCorrectionAction(
+  input: unknown,
+): Promise<MutationResult<{ status: string; journalEntryId: string; purchaseTotal: string }>> {
+  const parsed = z.object({
+    revisionId: uuid,
+    expectedVersion: z.number().int().nonnegative(),
+    idempotencyKey: z.string().min(8).max(120),
+  }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "طلب تصحيح غير صالح" };
+
+  try {
+    await requireRole(["admin"]);
+    const supabase = await createServerSupabase();
+    const result = await callRpc<{
+      status: string;
+      journal_entry_id: string;
+      purchase_total: string | number;
+    }>(supabase, "post_correction", {
+      p_revision_id: parsed.data.revisionId,
+      p_expected_version: parsed.data.expectedVersion,
+      p_idempotency_key: parsed.data.idempotencyKey,
+    });
+    return {
+      ok: true,
+      data: {
+        status: result.status,
+        journalEntryId: result.journal_entry_id,
+        purchaseTotal: String(result.purchase_total),
+      },
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "تعذر ترحيل التصحيح" };
+  }
+}

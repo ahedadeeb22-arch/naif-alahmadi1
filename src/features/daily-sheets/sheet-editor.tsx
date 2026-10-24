@@ -7,7 +7,7 @@ import { evaluateReadiness } from "@/features/daily-sheets/domain/allocation";
 import { toDomainDispositions, toDomainLines, type SheetView } from "@/features/daily-sheets/data";
 import { PurchaseLineRow } from "@/features/daily-sheets/purchase-line-row";
 import { openDraftAction } from "@/features/daily-sheets/actions";
-import { cancelLineAction, postAction, submitAction } from "@/features/daily-sheets/mutations";
+import { cancelLineAction, postAction, postCorrectionAction, submitAction } from "@/features/daily-sheets/mutations";
 import { formatAmount } from "@/lib/format";
 import { newIdempotencyKey } from "@/lib/rpc";
 import { Alert, EmptyState, StatusBadge } from "@/components/ui/status";
@@ -94,11 +94,14 @@ export function SheetEditor({
     if (!confirmed) return;
     setBusy(true);
     setError("");
-    const result = await postAction({
+    const postInput = {
       revisionId: sheet.revision.id,
       expectedVersion: sheet.sheet.version,
       idempotencyKey: postKey,
-    });
+    };
+    const result = sheet.revision.revision_kind === "correction"
+      ? await postCorrectionAction(postInput)
+      : await postAction(postInput);
     setBusy(false);
     if (!result.ok) return setError(result.error ?? "تعذر اعتماد اليومية");
     setNotice("تم اعتماد اليومية وترحيل القيود");
