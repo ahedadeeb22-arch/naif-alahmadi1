@@ -454,7 +454,7 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array['profiles','stores','suppliers','products','night_orders','daily_sheets','daily_sheet_revisions','purchase_lines']
+  foreach t in array array['profiles','stores','suppliers','products','night_orders','daily_sheets','daily_sheet_revisions','purchase_lines']
   loop
     execute format('drop trigger if exists %I_touch on public.%I', t, t);
     execute format('create trigger %I_touch before update on public.%I for each row execute function public.touch_updated_at()', t, t);
